@@ -23,7 +23,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use iceberg::{Error, ErrorKind, Result};
 use reqsign_aws_v4::{Credential, DefaultCredentialProvider, RequestSigner};
-use reqsign_core::{Context, HttpSend, OsEnv, Signer};
+use reqsign_core::{Context, HttpSend, OsEnv, ProvideCredential, Signer};
 use reqsign_file_read_tokio::TokioFileRead;
 use reqwest::{Client, Request};
 
@@ -31,7 +31,7 @@ use crate::RestCatalogConfig;
 
 /// A trait for signing HTTP requests.
 #[async_trait]
-pub(crate) trait HttpRequestSigner: Send + Sync + Debug {
+pub trait HttpRequestSigner: Send + Sync + Debug {
     /// Sign the request by modifying its headers (and potentially other parts).
     async fn sign(&self, parts: &mut http::request::Parts) -> Result<()>;
 
@@ -98,21 +98,32 @@ impl TryFrom<&RestCatalogConfig> for Option<Arc<dyn HttpRequestSigner>> {
 
 /// The HttpRequestSigner implementation for AWS SigV4
 #[derive(Debug)]
-pub(crate) struct SigV4Signer {
+pub struct SigV4Signer {
     /// The inner reqwest signer with an AWS credential loader.
     inner: Signer<Credential>,
 }
 
 impl SigV4Signer {
-    pub(crate) fn new(client: Client, service: &str, region: &str) -> Self {
+    /// Create a new SigV4 signer using the default AWS credential chain
+    /// (env vars, profiles, IMDS, etc.).
+    pub fn new(client: Client, service: &str, region: &str) -> Self {
+        Self::with_credential_provider(client, service, region, DefaultCredentialProvider::new())
+    }
+
+    /// Create a new SigV4 signer with a custom credential provider.
+    pub fn with_credential_provider(
+        client: Client,
+        service: &str,
+        region: &str,
+        credential_provider: impl ProvideCredential<Credential = Credential>,
+    ) -> Self {
         let ctx = Context::new()
             .with_file_read(TokioFileRead)
             .with_http_send(ReqwestHttpSend(client))
             .with_env(OsEnv);
-        let loader = DefaultCredentialProvider::new();
         let signer = RequestSigner::new(service, region);
         Self {
-            inner: Signer::new(ctx, loader, signer),
+            inner: Signer::new(ctx, credential_provider, signer),
         }
     }
 }

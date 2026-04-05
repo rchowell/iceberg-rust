@@ -62,7 +62,10 @@ impl Debug for HttpClient {
 
 impl HttpClient {
     /// Create a new http client.
-    pub fn new(cfg: &RestCatalogConfig) -> Result<Self> {
+    pub fn new(
+        cfg: &RestCatalogConfig,
+        signer_override: Option<Arc<dyn HttpRequestSigner>>,
+    ) -> Result<Self> {
         let extra_headers = cfg.extra_headers()?;
         Ok(HttpClient {
             client: cfg.client().unwrap_or_default(),
