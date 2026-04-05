@@ -72,7 +72,7 @@ impl HttpClient {
             extra_headers,
             extra_oauth_params: cfg.extra_oauth_params(),
             disable_header_redaction: cfg.disable_header_redaction(),
-            signer: cfg.signer()?,
+            signer: signer_override.or(cfg.signer()?),
         })
     }
 
@@ -101,7 +101,7 @@ impl HttpClient {
                 self.extra_oauth_params
             },
             disable_header_redaction: cfg.disable_header_redaction(),
-            signer: cfg.signer()?.or(self.signer),
+            signer: self.signer.or(cfg.signer()?),
         })
     }
 
